@@ -91,7 +91,7 @@ type GameEvents struct {
     // Include slices for other event types...
 }
 
-func parseDemo(demoPath string) (*GameEvents, error) {
+func parse(demoPath string) (*GameEvents, error) {
 	f, err := os.Open(demoPath)
 	if err != nil {
 			return nil, err
@@ -191,9 +191,9 @@ func parseDemo(demoPath string) (*GameEvents, error) {
 
 }
 
-func main() {
+func Parsedemo() {
     demoPath := "https://utfs.io/f/bb4bbd6d-5291-4f77-8dcf-04606f680c0f-3ke0cr.dem" // Replace with the actual demo file path
-    events, err := parseDemo(demoPath)
+    events, err := parse(demoPath)
     if err != nil {
         log.Fatalf("Error parsing demo: %v", err)
     }
