@@ -90,6 +90,7 @@ type GameEvents struct {
     // Include slices for other event types...
 }
 
+
 func parse(reader io.Reader) (*GameEvents, error) {
 	p := dem.NewParser(reader)
 	defer p.Close()
@@ -156,6 +157,82 @@ func parse(reader io.Reader) (*GameEvents, error) {
 			KillerPos:  killerPos,
 			VictimPos:  victimPos,
 		})
+	})
+
+	p.RegisterEventHandler(func(e events.GrenadeEventIf) {
+    if isWarmup { return } // Skip during warmup
+
+    grenade := e.Base()
+    gameEvents.Grenades = append(gameEvents.Grenades, GrenadeEvent{
+        Thrower:     grenade.Thrower.Name,
+        GrenadeType: grenade.GrenadeType.String(),
+        Position: Position{
+            X: float32(grenade.Position.X),
+            Y: float32(grenade.Position.Y),
+            Z: float32(grenade.Position.Z),
+        },
+        Tick: p.CurrentFrame(),
+    })
+	})
+
+	p.RegisterEventHandler(func(e events.BombPlanted) {
+    if isWarmup { return }
+    gameEvents.BombEvents = append(gameEvents.BombEvents, BombEvent{
+        Player:    e.Player.Name,
+        Site:      string(e.Site),
+        EventType: "planted",
+        Tick:      p.CurrentFrame(),
+    })
+	})
+
+	p.RegisterEventHandler(func(e events.BombDefused) {
+		if isWarmup { return }
+		gameEvents.BombEvents = append(gameEvents.BombEvents, BombEvent{
+				Player:    e.Player.Name, // Defuser's name
+				Site:      "", // Site is not directly available; consider previous BombPlanted event for reference if needed
+				EventType: "defused",
+				Tick:      p.CurrentFrame(),
+		})
+	})
+
+	p.RegisterEventHandler(func(e events.BombExplode) {
+		if isWarmup { return }
+		gameEvents.BombEvents = append(gameEvents.BombEvents, BombEvent{
+				Player:    "", // Exploding the bomb does not have an associated player in the event
+				Site:      "", // Similar to defuse, site information would have to be inferred
+				EventType: "exploded",
+				Tick:      p.CurrentFrame(),
+		})
+	})
+
+	
+	p.RegisterEventHandler(func(e events.RoundEnd) {
+    reason := "unknown"
+    switch e.Reason {
+    case events.RoundEndReasonTerroristsWin:
+        reason = "terrorists_win"
+    case events.RoundEndReasonCTWin:
+        reason = "ct_win"
+    case events.RoundEndReasonBombDefused:
+        reason = "bomb_defused"
+    }
+
+
+    winner := "none"
+    if e.Winner == 2 {
+        winner = "Terrorists"
+    } else if e.Winner == 3 {
+        winner = "Counter-Terrorists"
+    }
+
+    gameEvents.RoundEvents = append(gameEvents.RoundEvents, RoundEvent{
+        EventType: "round_end",
+        Reason:    reason,
+        Winner:    winner,
+        ScoreCT:   p.GameState().TeamCounterTerrorists().Score(),
+        ScoreT:    p.GameState().TeamTerrorists().Score(),
+        Tick:      p.CurrentFrame(),
+    })
 	})
 
 	// Complete the parsing and return the structured data
