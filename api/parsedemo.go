@@ -192,7 +192,7 @@ func parseDemo(demoPath string) (*GameEvents, error) {
 }
 
 func main() {
-    demoPath := "./mibr-vs-oddik-vertigo.dem" // Replace with the actual demo file path
+    demoPath := "https://utfs.io/f/bb4bbd6d-5291-4f77-8dcf-04606f680c0f-3ke0cr.dem" // Replace with the actual demo file path
     events, err := parseDemo(demoPath)
     if err != nil {
         log.Fatalf("Error parsing demo: %v", err)
