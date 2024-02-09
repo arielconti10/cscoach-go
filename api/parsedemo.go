@@ -2,12 +2,9 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 
 	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
 	events "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/events"
@@ -93,14 +90,8 @@ type GameEvents struct {
     // Include slices for other event types...
 }
 
-func parse(demoPath string) (*GameEvents, error) {
-	f, err := os.Open(demoPath)
-	if err != nil {
-			return nil, err
-	}
-	defer f.Close()
-
-	p := dem.NewParser(f)
+func parse(reader io.Reader) (*GameEvents, error) {
+	p := dem.NewParser(reader)
 	defer p.Close()
 
 	gameEvents := &GameEvents{
@@ -112,63 +103,63 @@ func parse(demoPath string) (*GameEvents, error) {
 
 	// Handler to track the start of each round and whether it's a warmup
 	p.RegisterEventHandler(func(e events.RoundStart) {
-			currentRound++
-			isWarmup = p.GameState().IsWarmupPeriod()
+		currentRound++
+		isWarmup = p.GameState().IsWarmupPeriod()
 	})
 
-    // Handler for Kill events
-    p.RegisterEventHandler(func(e events.Kill) {
-        if isWarmup {
-            return // Skip kills during warmup
-        }
+	// Handler for Kill events
+	p.RegisterEventHandler(func(e events.Kill) {
+		if isWarmup {
+				return // Skip kills during warmup
+		}
 
-        var killerPos, victimPos Position
-        var killerName, victimName, assisterName, weapon string
+		var killerPos, victimPos Position
+		var killerName, victimName, assisterName, weapon string
 
-        if e.Killer != nil {
-            killerPosition := e.Killer.Position()
-            killerPos = Position{
-                X: float32(killerPosition.X),
-                Y: float32(killerPosition.Y),
-                Z: float32(killerPosition.Z),
-            }
-            killerName = e.Killer.Name
-        }
+		if e.Killer != nil {
+				killerPosition := e.Killer.Position()
+				killerPos = Position{
+						X: float32(killerPosition.X),
+						Y: float32(killerPosition.Y),
+						Z: float32(killerPosition.Z),
+				}
+				killerName = e.Killer.Name
+		}
 
-        if e.Victim != nil {
-            victimPosition := e.Victim.Position()
-            victimPos = Position{
-                X: float32(victimPosition.X),
-                Y: float32(victimPosition.Y),
-                Z: float32(victimPosition.Z),
-            }
-            victimName = e.Victim.Name
-        }
+		if e.Victim != nil {
+				victimPosition := e.Victim.Position()
+				victimPos = Position{
+						X: float32(victimPosition.X),
+						Y: float32(victimPosition.Y),
+						Z: float32(victimPosition.Z),
+				}
+				victimName = e.Victim.Name
+		}
 
-        if e.Assister != nil {
-            assisterName = e.Assister.Name
-        }
+		if e.Assister != nil {
+				assisterName = e.Assister.Name
+		}
 
-        if e.Weapon != nil {
-            weapon = e.Weapon.String()
-        }
+		if e.Weapon != nil {
+				weapon = e.Weapon.String()
+		}
 
-        // Add the kill event to the current round
-        gameEvents.Rounds[currentRound] = append(gameEvents.Rounds[currentRound], KillEvent{
-            Killer:     killerName,
-            Assister:   assisterName,
-            Victim:     victimName,
-            Weapon:     weapon,
-            Headshot:   e.IsHeadshot,
-            Penetrated: e.PenetratedObjects > 0,
-            Tick:       p.CurrentFrame(),
-            KillerPos:  killerPos,
-            VictimPos:  victimPos,
-        })
-    })
+		// Add the kill event to the current round
+		gameEvents.Rounds[currentRound] = append(gameEvents.Rounds[currentRound], KillEvent{
+			Killer:     killerName,
+			Assister:   assisterName,
+			Victim:     victimName,
+			Weapon:     weapon,
+			Headshot:   e.IsHeadshot,
+			Penetrated: e.PenetratedObjects > 0,
+			Tick:       p.CurrentFrame(),
+			KillerPos:  killerPos,
+			VictimPos:  victimPos,
+		})
+	})
 
-	// Parse the demo to the end
-	err = p.ParseToEnd()
+	// Complete the parsing and return the structured data
+	err := p.ParseToEnd()
 	if err != nil {
 			return nil, err
 	}
@@ -176,38 +167,35 @@ func parse(demoPath string) (*GameEvents, error) {
 	return gameEvents, nil
 }
 
+
 func Parsedemo(w http.ResponseWriter, r *http.Request) {
-    demoPath := "https://utfs.io/f/bb4bbd6d-5291-4f77-8dcf-04606f680c0f-3ke0cr.dem" // Replace with the actual demo file path
-    events, err := parse(demoPath)
-    if err != nil {
-        log.Fatalf("Error parsing demo: %v", err)
-    }
+	demoURL := "https://utfs.io/f/bb4bbd6d-5291-4f77-8dcf-04606f680c0f-3ke0cr.dem"
 
-    jsonData, err := json.MarshalIndent(events, "", "    ")
-    if err != nil {
-        log.Fatalf("Error marshalling JSON: %v", err)
-    }
-
-		// Creating the JSON file name from the demoPath
-    baseName := strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath))
-    jsonFilePath := filepath.Join(filepath.Dir(demoPath), baseName+".json")
-
-    // Writing to the JSON file
-    jsonFile, err := os.Create(jsonFilePath)
-    if err != nil {
-        log.Fatalf("Error creating JSON file: %v", err)
-    }
-    defer jsonFile.Close()
-
-    if _, err := jsonFile.Write(jsonData); err != nil {
-        log.Fatalf("Error writing to JSON file: %v", err)
-    }
-
-	jsonResp, err := json.Marshal(jsonData)
+	// Stream the demo file directly
+	resp, err := http.Get(demoURL)
 	if err != nil {
-		fmt.Println("Error happened in JSON marshal. Err:", err)
-	} else {
-		w.Write(jsonResp)
+			log.Fatalf("Error getting demo file: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if we received a successful status code
+	if resp.StatusCode != http.StatusOK {
+			log.Fatalf("Error getting demo file: HTTP Status Code %d", resp.StatusCode)
 	}
 
+	// Pass the response body (io.Reader) directly to the parser
+	events, err := parse(resp.Body)
+	if err != nil {
+			log.Fatalf("Error parsing demo: %v", err)
+	}
+
+	// Convert parsed events to JSON
+	jsonData, err := json.MarshalIndent(events, "", "    ")
+	if err != nil {
+			log.Fatalf("Error marshalling JSON: %v", err)
+	}
+
+	// Set response header and write JSON data
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
 }
