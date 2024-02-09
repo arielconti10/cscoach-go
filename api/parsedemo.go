@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,26 +174,9 @@ func parse(demoPath string) (*GameEvents, error) {
 	}
 
 	return gameEvents, nil
-
-	// p.RegisterEventHandler(func(e events.GrenadeEventIf) {
-	// 	grenade := e.Base()
-	// 	gameEvents.Grenades = append(gameEvents.Grenades, GrenadeEvent{
-	// 		Thrower:     grenade.Thrower.Name,
-	// 		GrenadeType: grenade.GrenadeType.String(),
-	// 		Position:    
-	// 				Position{
-	// 					X: float32(grenade.Position.X), 
-	// 					Y: float32(grenade.Position.Y), 
-	// 					Z: float32(grenade.Position.Z),
-	// 				},
-	// 			Tick: p.CurrentFrame(),
-	// 	})
-	// })
-	// // Add handlers for other event types...
-
 }
 
-func Parsedemo() {
+func Parsedemo(w http.ResponseWriter, r *http.Request) {
     demoPath := "https://utfs.io/f/bb4bbd6d-5291-4f77-8dcf-04606f680c0f-3ke0cr.dem" // Replace with the actual demo file path
     events, err := parse(demoPath)
     if err != nil {
@@ -218,6 +203,11 @@ func Parsedemo() {
         log.Fatalf("Error writing to JSON file: %v", err)
     }
 
-    log.Printf("JSON data written to file: %s\n", jsonFilePath)
-    log.Println(string(jsonData))
+	jsonResp, err := json.Marshal(jsonData)
+	if err != nil {
+		fmt.Println("Error happened in JSON marshal. Err:", err)
+	} else {
+		w.Write(jsonResp)
+	}
+
 }
